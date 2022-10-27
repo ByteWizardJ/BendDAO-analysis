@@ -2,6 +2,8 @@
 
 https://github.com/cgq0123/bend-gitbook-portal/blob/chinese-v2/SUMMARY.md
 
+https://goerli.benddao.xyz/
+
 ## Liquidity Listing
 
 ![Liquidity Listing](68747470733a2f2f6c68332e676f6f676c6575736572636f6e74656e742e636f6d2f706e5a487175355361704c5f374a6651774f446c2d562d57544a4d4275754347675556364f694839534869654658583255596e7a39645075535879484e554735786f5f534949393847676f6a416f4b48666661484b50.png)
@@ -268,9 +270,356 @@ canExecuteTaker 方法会校验价格，token id 以及订单的时间。
 
 https://github.com/BendDAO/bend-lending-protocol
 
-LendPool 是 Bend 借贷协议的主要入口。与 Bend 的大多数借贷相关交互将通过 LendPool 进行。
+#### Main Contracts 和 Supporting Contracts
+
+Lending Protocol 中的合约分为两类，Main Contracts 和 Supporting Contracts。
+
+Main Contracts 包含:
+
+1. `LendPool` : Bend 借贷协议的主要入口。与 Bend 的大多数借贷相关交互将通过 LendPool 进行
+2. `LendPoolLoan` : NFT 借贷管理者，在借贷中使用 NFT 作为抵押品时生成唯一的借贷，并维护 NFT 与借贷之间的关系。
+3. `LendPoolAddressesProvider` : 协议的用于特定市场主要地址。应通过适当的调用从该合约中检索最新的合约地址。
+4. `LendPoolAddressesProviderRegistry` : 包含针对不同市场的活动 LendPoolAddressesProvider 地址列表。
+5. `bTokens` : 一种特殊的 ERC20 代币。用于协议中的计息、代币化存款。
+6. `debtTokens` : 一种特殊的 ERC20 代币。协议中使用的代币化债务。转移方法被禁用
+7. `boundNFTs`: 一种特殊的 ERC721 代币本票，协议中使用的代币化抵押品。大多数标准的 ERC721 方法被禁用，因为 boundNFT 是不可转让的。
+
+Supporting Contracts 一般不应直接与之交互，但通过合同调用在整个 Bend 协议中使用。
+
+Supporting Contracts 包含:
+
+1. `LendPoolConfigurator` : 为 LendPool 提供配置功能。
+2. `InterestRate` : 保存了计算和更新特定储备的利率所需的信息。每份合同都使用每种货币的相应参数存储优化的基础曲线。这意味着有一个数学函数决定了每个资产池的利率，利率根据借入资金的数量和资产池的总流动性（即利用率）而变化。
+3. `NFTOracle`: 提供整个协议所需的储备和 NFTs 资产价格数据。
+
+#### LendPool
+
+LendPool 是 Bend 借贷协议的主要入口，它暴露了所有面向用户的行动。与 Bend 的大多数借贷相关交互将通过 LendPool 进行。
+
+> LendPool 的入金、借款、取款和还款方法只适用于 ERC20 和 ERC721，如果你想使用原生 ETH 入金、取款、借款或还款，请使用 WETHGateway 代替，如果你想使用 CryptoPunks 作为抵押品借款或还款，请使用 PunkGateway。
+
+##### 重要属性
+
+所有 LendPool 的属性都在 LendPoolStorage 合约中定义。
+
+###### 1. _reserves(储备金)
+
+存储储备金配置的字典。key 是储备金资产对应的合约地址。value 是具体的配置信息。
+
+```solidity
+  mapping(address => DataTypes.ReserveData) internal _reserves;
+```
+
+```solidity
+struct ReserveData {
+    //stores the reserve configuration 
+    // 储备金的一些配置
+    ReserveConfigurationMap configuration;
+    //the liquidity index. Expressed in ray
+    // 流动性指数
+    uint128 liquidityIndex;
+    //variable borrow index. Expressed in ray
+    // 浮动借贷指数
+    uint128 variableBorrowIndex;
+    //the current supply rate. Expressed in ray
+    // 当前的供应率
+    uint128 currentLiquidityRate;
+    //the current variable borrow rate. Expressed in ray
+    // 当前的可变借款利率
+    uint128 currentVariableBorrowRate;
+    uint40 lastUpdateTimestamp;
+    //tokens addresses
+    // 债权代币的地址
+    address bTokenAddress;
+    // 债务代币的地址
+    address debtTokenAddress;
+    //address of the interest rate strategy
+    // 利息策略
+    address interestRateAddress;
+    //the id of the reserve. Represents the position in the list of the active reserves
+    // 储备的ID。代表在活动的储备列表中的位置
+    uint8 id;
+  }
+```
+
+```solidity
+// 不同的位置表示不同的配置项
+struct ReserveConfigurationMap {
+    //bit 0-15: LTV
+    //bit 16-31: Liq. threshold
+    //bit 32-47: Liq. bonus
+    //bit 48-55: Decimals
+    //bit 56: Reserve is active
+    //bit 57: reserve is frozen
+    //bit 58: borrowing is enabled
+    //bit 59: stable rate borrowing enabled
+    //bit 60-63: reserved
+    //bit 64-79: reserve factor
+    uint256 data;
+  }
+```
+
+###### 2. _reservesList
+
+存储的是储备金对应资产的合约地址。key 是储备金对应的 id
+
+```solidity
+  mapping(uint256 => address) internal _reservesList;
+```
+
+###### 3. _reservesCount
+
+存储的是所有储备金的类型数量
+
+```solidity
+  uint256 internal _reservesCount;
+```
+
+###### 4. _nfts
+
+存储的是可以进行借贷的 NFT 的信息。
+
+key 是 NFT 的合约地址，value 是对应 NFT 的配置信息。
+
+```solidity
+  mapping(address => DataTypes.NftData) internal _nfts;
+```
+
+```solidity
+struct NftData {
+    //stores the nft configuration
+    // 配置信息
+    NftConfigurationMap configuration;
+    //address of the bNFT contract
+    // bNFT 的合约地址
+    address bNftAddress;
+    //the id of the nft. Represents the position in the list of the active nfts
+    uint8 id;
+    uint256 maxSupply;
+    uint256 maxTokenId;
+  }
+```
+
+```solidity
+struct NftConfigurationMap {
+    //bit 0-15: LTV
+    //bit 16-31: Liq. threshold
+    //bit 32-47: Liq. bonus
+    //bit 56: NFT is active
+    //bit 57: NFT is frozen
+    uint256 data;
+  }
+```
+
+###### 5. _nftsList
+
+```solidity
+  mapping(uint256 => address) internal _nftsList;
+```
+
+###### 6. _nftsCount
+
+```solidity
+  uint256 internal _nftsCount;
+```
+
+##### 方法
+
+###### 1. deposit（存款）
+
+向储备金存入一定数量的相关资产，获得相关的 bTokens 作为债权证明。例如，用户存入 100 USDC，得到 100 bUSDC。
+
+```solidity
+function deposit(
+    address asset, // 存入资产的合约地址
+    uint256 amount, // 数量
+    address onBehalfOf, // 收到 btoken 的地址
+    uint16 referralCode // 用于注册发起该操作的集成商的代码，以获得潜在的奖励。如果该操作是由用户直接执行的，没有任何中间人，则为0
+  )
+```
+
+这个方法的具体逻辑在 `SupplyLogic` 的 `executeDeposit()` 方法中。
+
+存入的资产会转移到 bToken 对应的合约中。同时指定数量的 bToken 将会被铸造。
+
+然后会发出 `Deposit` 事件。
+
+```solidity
+    emit Deposit(params.initiator, params.asset, params.amount, params.onBehalfOf, params.referralCode);
+```
+
+###### 2. withdraw（提取）
+
+从储备中提取一定数量的质押资产，销毁所拥有的等值 bToken。
+
+```solidity
+function withdraw(
+    address asset, // 取出的资产合约地址
+    uint256 amount, // 数量
+    address to 
+  )
+```
+
+这个方法的具体逻辑在 `SupplyLogic` 的 `executeWithdraw()` 方法中。
+
+指定数量的 bToken 将会被销毁，然后将对应数量的资产转移给指定的地址。
+
+最后发出 `Withdraw` 事件。
+
+```solidity
+    emit Withdraw(params.initiator, params.asset, amountToWithdraw, params.to);
+```
+
+###### 3. borrow（借）
+
+允许抵押资产的用户借入特定数量的储备基础资产。例如。用户借入 100 USDC，在钱包中收到 100 USDC 并锁定合约中的抵押资产。
+
+```solidity
+function borrow(
+    address asset, // 要借的资产合约地址
+    uint256 amount,
+    address nftAsset, // 用作抵押品的 NFT 的地址
+    uint256 nftTokenId, // 用作抵押品的 NFT 的代币 ID
+    address onBehalfOf, // 将收到贷款的用户的地址。如果他想用自己的抵押品借款，应该是借款人自己调用函数的地址
+    uint16 referralCode 
+  ) 
+```
+
+这个方法的具体逻辑在 `BorrowLogic` 中的 `executeBorrow`。
 
 
+
+
+###### 4. repay（还款）
+###### 5. auction（拍卖）
+###### 6. redeem（赎回）
+###### 7. liquidate（清算）
+
+
+#### LendPoolLoan
+
+协议的 NFT 借贷管理者，在借贷中使用 NFT 作为抵押品时生成唯一的借贷，并维护 NFT 与借贷之间的关系。
+
+##### 属性
+
+###### 1. _loanIdTracker
+
+当前生成借贷的 id 索引。
+
+```solidity
+  CountersUpgradeable.Counter private _loanIdTracker;
+```
+
+###### 2. _loans
+
+存储的是所有借贷的具体信息。key 是借贷的 id，value 是借贷的具体信息。
+
+```solidity
+mapping(uint256 => DataTypes.LoanData) private _loans;
+```
+
+```solidity
+struct LoanData {
+    //the id of the nft loan
+    uint256 loanId;
+    //the current state of the loan
+    LoanState state;
+    //address of borrower
+    // 借款人
+    address borrower;
+    //address of nft asset token
+    address nftAsset;
+    //the id of nft token
+    uint256 nftTokenId;
+    //address of reserve asset token
+    // 储备金的合约地址，也就是要借出资产的合约地址
+    address reserveAsset;
+    //scaled borrow amount. Expressed in ray
+    // 按比例的借款金额
+    uint256 scaledAmount;
+    //start time of first bid time
+    // 清算时间
+    uint256 bidStartTimestamp;
+    //bidder address of higest bid
+    address bidderAddress;
+    //price of higest bid
+    uint256 bidPrice;
+    //borrow amount of loan
+    uint256 bidBorrowAmount;
+    //bidder address of first bid
+    address firstBidderAddress;
+  }
+```
+
+###### 3. _nftToLoanIds
+
+以 nft 的合约地址和token id 存储对应的借贷 loanId，存储某个 nft 的具体某个 id 对应的 loanId。
+
+```solidity
+mapping(address => mapping(uint256 => uint256)) private _nftToLoanIds;
+```
+
+```solidity
+_nftToLoanIds[nftAsset][nftTokenId] = loanId;
+```
+
+###### 4. _nftTotalCollateral
+
+存储某个 nft 抵押品的数量。
+
+```solidity
+mapping(address => uint256) private _nftTotalCollateral;
+```
+
+###### 5. _userNftCollateral
+
+记录某个用户的某种 nft 下抵押品的数量。
+
+```solidity
+mapping(address => mapping(address => uint256)) private _userNftCollateral;
+```
+
+```solidity
+_userNftCollateral[loan.borrower][loan.nftAsset] -= 1;
+```
+
+##### 方法
+
+###### 1. createLoan
+
+```solidity
+function createLoan(
+    address initiator,
+    address onBehalfOf,
+    address nftAsset,
+    uint256 nftTokenId,
+    address bNftAddress,
+    address reserveAsset,
+    uint256 amount,
+    uint256 borrowIndex
+  )
+```
+
+该方法中有以下操作
+
+1. 生成 loanid
+2. 根据抵押的 nft 的合约地址和 tokenId 保存 loanid
+3. 将抵押的 nft 转移到当前 pool 合约
+4. 铸造 bNFT 给用户
+5. 保存信息
+6. 发出 `LoanCreated` 事件
+
+###### 2. updateLoan
+
+```solidity
+function updateLoan(
+    address initiator,
+    uint256 loanId,
+    uint256 amountAdded,
+    uint256 amountTaken,
+    uint256 borrowIndex
+  )
+```
 
 ### Down Payment
 
