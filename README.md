@@ -621,6 +621,89 @@ function updateLoan(
   )
 ```
 
+根据传入的 `amountAdded` 和 `amountTaken` 来调节对应 loanId 的借贷信息。
+
+发出 `LoanUpdated` 事件。
+
+###### 3. repayLoan(偿还贷款)
+
+```solidity
+function repayLoan(
+    address initiator,
+    uint256 loanId,
+    address bNftAddress,
+    uint256 amount,
+    uint256 borrowIndex
+  )
+```
+
+该方法中有以下操作
+
+1. 首先修改存储的 loan 状态，防止重入攻击
+2. 将 `_nftToLoanIds` 中对应的 loanId 置为 0
+3. `_userNftCollateral` 和 `_nftTotalCollateral` 中对应的数量减去 1
+4. 销毁债务 bNFT
+5. 将质押的 NFT 转移给用户
+6. 发出 `LoanRepaid` 事件
+
+###### 4. auctionLoan（拍卖）
+
+```solidity
+function auctionLoan(
+    address initiator,
+    uint256 loanId,
+    address onBehalfOf,
+    uint256 bidPrice,
+    uint256 borrowAmount,
+    uint256 borrowIndex
+  )
+```
+
+1. 获取 loan 的信息
+2. 如果 `bidStartTimestamp` 是 0，则说明还没开始拍卖，设置对应的状态和数据
+3. 如果 loan 当前的状态不是 Auction ，则报错
+4. 如果 当前传入的 `bidPrice` 小于等于 loan 的 `bidPrice`，也报错
+5. 设置 loan 的状态
+6. 发出 `LoanAuctioned` 的事件
+
+
+###### 5. redeemLoan（赎回）
+
+```solidity
+function redeemLoan(
+    address initiator,
+    uint256 loanId,
+    uint256 amountTaken,
+    uint256 borrowIndex
+  ) 
+```
+
+1. 只有 Auction 状态的才能进行赎回
+2. 传入的 `amountTaken` 必须满足要求的数量
+3. 清除 loan 的状态
+4. 发出 `LoanRedeemed` 的事件
+
+
+###### 6. liquidateLoan（清算）
+
+```solidity
+function liquidateLoan(
+    address initiator,
+    uint256 loanId,
+    address bNftAddress,
+    uint256 borrowAmount,
+    uint256 borrowIndex
+  ) 
+```
+
+1. 只有 Auction 状态的才能进行清算
+2. 更改 loan 的状态，防止重入攻击
+3. 将 `_nftToLoanIds` 中对应的 loanId 置为 0
+4. `_userNftCollateral` 和 `_nftTotalCollateral` 中对应的数量减去 1
+5. 销毁债务 bNFT
+6. 将质押的 NFT 转移给用户
+7. 发出 `LoanLiquidated` 事件
+
 ### Down Payment
 
 https://github.com/BendDAO/bend-downpayment
