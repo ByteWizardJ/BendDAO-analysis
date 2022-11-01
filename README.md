@@ -485,14 +485,36 @@ function borrow(
   ) 
 ```
 
-这个方法的具体逻辑在 `BorrowLogic` 中的 `executeBorrow`。
+这个方法的具体逻辑在 `BorrowLogic` 中的 `_borrow`。
 
+```solidity
+function _borrow(
+    ILendPoolAddressesProvider addressesProvider,
+    mapping(address => DataTypes.ReserveData) storage reservesData,
+    mapping(address => DataTypes.NftData) storage nftsData,
+    DataTypes.ExecuteBorrowParams memory params
+  )
+```
 
-
+1. 更新 reserve (储备金)的状态，这个过程中会铸造 BToken
+2. 根据抵押品 NFT 的信息来获取借贷是否已经存在
+3. 如果借贷不存在则创建借贷，铸造 bNFT 给用户
+4. 如果借贷存在则更新借贷信息
+5. 铸造指定数量的 debtToken（债务代币）给用户或者代理人
+6. 更新 reserve (储备金)的利率
+7. 将 BToken 转移给用户
+8. 发出 `Borrow` 事件
 
 ###### 4. repay（还款）
+
+偿还特定储备的借入金额，销毁所拥有的等值贷款。例如。用户偿还 100 USDC，销毁贷款并获得抵押资产。
+
 ###### 5. auction（拍卖）
+
+
 ###### 6. redeem（赎回）
+
+
 ###### 7. liquidate（清算）
 
 
@@ -666,7 +688,6 @@ function auctionLoan(
 5. 设置 loan 的状态
 6. 发出 `LoanAuctioned` 的事件
 
-
 ###### 5. redeemLoan（赎回）
 
 ```solidity
@@ -682,7 +703,6 @@ function redeemLoan(
 2. 传入的 `amountTaken` 必须满足要求的数量
 3. 清除 loan 的状态
 4. 发出 `LoanRedeemed` 的事件
-
 
 ###### 6. liquidateLoan（清算）
 
