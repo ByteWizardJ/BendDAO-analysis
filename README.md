@@ -1,8 +1,14 @@
 # BendDAO-analysis
 
-https://github.com/cgq0123/bend-gitbook-portal/blob/chinese-v2/SUMMARY.md
+BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵押品挂单和 NFT 首付购买。
 
-https://goerli.benddao.xyz/
+这里对他的业务和合约进行了解析。
+
+1. 官网：https://www.benddao.xyz/
+2. 文档：https://docs.benddao.xyz/
+3. 中文文档（一部分内容已经不再适用于最新版本）：https://github.com/cgq0123/bend-gitbook-portal/blob/chinese-v2/SUMMARY.md
+4. 开发者文档：https://docs.benddao.xyz/developers/
+5. 测试网站地址：https://goerli.benddao.xyz/
 
 ## Liquidity Listing
 
@@ -1555,4 +1561,3 @@ https://github.com/BendDAO/bend-downpayment
 买家将自动成为首付的借款人。借款人也可以在 BendDAO 市场上出售他们抵押的 NFT。
 
 目前支持的 NFT 集合是 BAYC、CryptoPunks、MAYC、Doodles、Space Doodles、CloneX 和 Azuki。首付的百分比由 BendDAO 上的 LTV 决定。
-
