@@ -1,15 +1,5 @@
 # BendDAO-analysis
 
-BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵押品挂单和 NFT 首付购买。
-
-这里对他的业务和合约进行了解析。
-
-1. 官网：https://www.benddao.xyz/
-2. 文档：https://docs.benddao.xyz/
-3. 中文文档（一部分内容已经不再适用于最新版本）：https://github.com/cgq0123/bend-gitbook-portal/blob/chinese-v2/SUMMARY.md
-4. 开发者文档：https://docs.benddao.xyz/developers/
-5. 测试网站地址：https://goerli.benddao.xyz/
-
 - [Liquidity Listing](#liquidity-listing)
  - [卖方视角](#卖方视角)
  - [买方视角](#买方视角)
@@ -48,6 +38,16 @@ BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵�
    - [DebtToken](#debttoken)
    - [BoundNFT](#boundnft)
    - [Down Payment](#down-payment)
+
+BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵押品挂单和 NFT 首付购买。
+
+这里对他的业务和合约进行了解析。
+
+1. 官网：https://www.benddao.xyz/
+2. 文档：https://docs.benddao.xyz/
+3. 中文文档（一部分内容已经不再适用于最新版本）：https://github.com/cgq0123/bend-gitbook-portal/blob/chinese-v2/SUMMARY.md
+4. 开发者文档：https://docs.benddao.xyz/developers/
+5. 测试网站地址：https://goerli.benddao.xyz/
 
 ## Liquidity Listing
 
