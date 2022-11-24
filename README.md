@@ -1,47 +1,6 @@
 # BendDAO-analysis
 
-- [Liquidity Listing](#liquidity-listing)
- - [卖方视角](#卖方视角)
- - [买方视角](#买方视角)
-- [boundNFT 的用途](#boundnft-的用途)
-- [预言机](#预言机)
-- [合约解析](#合约解析)
- - [Exchange Protocol](#exchange-protocol)
-   - [Order](#order)
-   - [成单方法](#成单方法)
-   - [事件](#事件)
-   - [Execution Strategy（执行策略）](#execution-strategy执行策略)
-   - [AuthorizationManager](#authorizationmanager)
-   - [CurrencyManager](#currencymanager)
- - [Lending Protocol](#lending-protocol)
-   - [Main Contracts 和 Supporting Contracts](#main-contracts-和-supporting-contracts)
-   - [LendPool](#lendpool)
-     - [重要属性](#重要属性)
-     - [方法](#方法)
-       - [1. deposit（存款）](#1-deposit存款)
-       - [2. withdraw（提取）](#2-withdraw提取)
-       - [3. borrow（借）](#3-borrow借)
-       - [4. repay（还款）](#4-repay还款)
-       - [5. auction（拍卖）](#5-auction拍卖)
-       - [6. redeem（赎回）](#6-redeem赎回)
-       - [7. liquidate（清算）](#7-liquidate清算)
-   - [LendPoolLoan](#lendpoolloan)
-     - [属性](#属性)
-     - [方法](#方法-1)
-       - [1. createLoan](#1-createloan)
-       - [2. updateLoan](#2-updateloan)
-       - [3. repayLoan(偿还贷款)](#3-repayloan偿还贷款)
-       - [4. auctionLoan（拍卖）](#4-auctionloan拍卖)
-       - [5. redeemLoan（赎回）](#5-redeemloan赎回)
-       - [6. liquidateLoan（清算）](#6-liquidateloan清算)
-   - [BToken](#btoken)
-   - [DebtToken](#debttoken)
-   - [BoundNFT](#boundnft)
-   - [Down Payment](#down-payment)
-
 BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵押品挂单和 NFT 首付购买。
-
-这里对他的业务和合约进行了解析。
 
 1. 官网：https://www.benddao.xyz/
 2. 文档：https://docs.benddao.xyz/
@@ -49,11 +8,43 @@ BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵�
 4. 开发者文档：https://docs.benddao.xyz/developers/
 5. 测试网站地址：https://goerli.benddao.xyz/
 
-## Liquidity Listing
+这里对他的业务和合约进行了解析。
+
+- [BendDAO-analysis](#benddao-analysis)
+  - [业务](#业务)
+    - [Liquidity Listing](#liquidity-listing)
+    - [boundNFT 的用途](#boundnft-的用途)
+    - [预言机](#预言机)
+  - [合约解析](#合约解析)
+    - [Exchange Protocol](#exchange-protocol)
+      - [Order](#order)
+      - [成单方法](#成单方法)
+        - [matchAskWithTakerBid](#matchaskwithtakerbid)
+        - [matchAskWithTakerBidUsingETHAndWETH](#matchaskwithtakerbidusingethandweth)
+        - [matchBidWithTakerAsk](#matchbidwithtakerask)
+      - [事件](#事件)
+      - [Execution Strategy（执行策略）](#execution-strategy执行策略)
+      - [AuthorizationManager](#authorizationmanager)
+      - [CurrencyManager](#currencymanager)
+    - [Lending Protocol](#lending-protocol)
+      - [Main Contracts 和 Supporting Contracts](#main-contracts-和-supporting-contracts)
+      - [LendPool](#lendpool)
+        - [重要属性](#重要属性)
+        - [方法](#方法)
+      - [LendPoolLoan](#lendpoolloan)
+        - [属性](#属性)
+        - [方法](#方法-1)
+      - [BToken](#btoken)
+      - [DebtToken](#debttoken)
+      - [BoundNFT](#boundnft)
+      - [Down Payment](#down-payment)
+
+## 业务
+### Liquidity Listing
 
 ![Liquidity Listing](68747470733a2f2f6c68332e676f6f676c6575736572636f6e74656e742e636f6d2f706e5a487175355361704c5f374a6651774f446c2d562d57544a4d4275754347675556364f694839534869654658583255596e7a39645075535879484e554735786f5f534949393847676f6a416f4b48666661484b50.png)
 
-### 卖方视角
+#### 卖方视角
 
 通过抵押品挂单，NFT 持有人/卖家可以选择接受即时 NFT 支持的贷款，并在挂单时即时获得最高达 40% 的地板价。用户可以随时在 BendDAO 上挂单抵押品。
 
@@ -63,7 +54,7 @@ BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵�
 4. 买方将在交易后偿还包括利息在内的贷款。扣除债务与利息后的余额将在交易后转给借款人（卖方）
 5. 卖方将获得的金额 = 总价 - 含息债务
 
-### 买方视角
+#### 买方视角
 
 买家可以根据实际价格，支付最低为 60% 的首付来购买蓝筹 NFT，同时启动 AAVE 的闪电贷款来支付剩余部分。如果 NFT 的总价远远高于系列地板价，首付的比例会增加。闪电贷的借款金额将通过 BendDAO 上的即时 NFT 支持的贷款来偿还。
 
@@ -75,7 +66,7 @@ BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵�
 4. 该闪电贷将用从 BendDAO 借出的 ETH 来偿还。
 5. 买家将在支付首付款时自动成为借款人。而借款人也可以在 BendDAO 市场上挂出他们抵押的 NFT 进行销售。
 
-## boundNFT 的用途
+### boundNFT 的用途
 
 1. 作为债务的 NFT：在借贷时被铸造，在偿还时被烧毁；
 2. 通过不可转移和不可授权的方式保护 NFT 所有者免受黑客攻击；
@@ -84,7 +75,7 @@ BendDAO 是一个蓝筹 NFT 流动性协议，支持 NFT 借贷，抵押，抵�
 
 ![](image%20(7)%20(1).png)
 
-## 预言机
+### 预言机
 
 Bend 协议使用来自 OpenSea 和 LooksRare 的 NFT 地板价作为 NFT 抵押品的价格推送数据。Bend 协议只支持蓝筹 NFT 资产的地板价，用于链上价格推送。蓝筹 NFT 的地板价不容易被操纵。此外，Bend 协议计算地板价的 TWAP（时间加权均价），以过滤来自 OpenSea 和 LooksRare 交易市场的价格波动。
 
